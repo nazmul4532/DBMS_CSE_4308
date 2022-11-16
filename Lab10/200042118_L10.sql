@@ -1,0 +1,204 @@
+-- TASK 1
+DECLARE
+    TOTAL_ROWS    NUMBER(10);
+    AFFECTED_ROWS NUMBER(10);
+BEGIN
+    UPDATE DEPARTMENT
+    SET
+        BUDGET = BUDGET - (
+            BUDGET*0.1
+        )
+    WHERE
+        BUDGET > 99999;
+    IF SQL%NOTFOUND THEN
+        DBMS_OUTPUT.PUT_LINE('NO BUDGET WAS MORE THAN THE GIVEN LIMIT');
+    ELSIF SQL%FOUND THEN
+        AFFECTED_ROWS:= SQL%ROWCOUNT;
+        SELECT
+            COUNT(DEPT_NAME) INTO TOTAL_ROWS
+        FROM
+            DEPARTMENT;
+        TOTAL_ROWS := TOTAL_ROWS - AFFECTED_ROWS;
+        DBMS_OUTPUT.PUT_LINE(TOTAL_ROWS
+            || ' ROWS WERE NOT UPDATED');
+    END IF;
+END;
+/
+
+-- TASK 2
+CREATE OR REPLACE PROCEDURE CURR_INSTRUCTORS(
+    DAY_FIRST_LETTER IN TIME_SLOT.DAY%TYPE,
+    START_TIME IN TIME_SLOT.START_HR%TYPE,
+    END_TIME IN TIME_SLOT.END_HR%TYPE
+) AS
+    CURSOR INS_INFO IS
+        SELECT
+            INSTRUCTOR.NAME AS NAME,
+            DAY,
+            START_HR,
+            START_MIN,
+            END_HR,
+            END_MIN
+        FROM
+            INSTRUCTOR
+            NATURAL JOIN TEACHES
+            NATURAL JOIN SECTION
+            NATURAL JOIN TIME_SLOT
+        WHERE
+            DAY = DAY_FIRST_LETTER
+            AND START_HR >= START_TIME
+            AND END_HR <= END_TIME;
+
+BEGIN
+    FOR I IN INS_INFO LOOP
+        DBMS_OUTPUT.PUT_LINE(I.NAME);
+    END LOOP;
+END;
+/
+
+DECLARE
+    DAY_FIRST_LETTER TIME_SLOT.DAY%TYPE;
+    START_TIME       TIME_SLOT.START_HR%TYPE;
+    END_TIME         TIME_SLOT.END_HR%TYPE;
+BEGIN
+    DAY_FIRST_LETTER := '&DAY_FIRST_LETTER';
+    START_TIME :='&START_TIME';
+    END_TIME:='&END_TIME';
+    CURR_INSTRUCTORS(DAY_FIRST_LETTER, START_TIME, END_TIME);
+END;
+/
+
+-- SELECT
+--     INSTRUCTOR.NAME AS NAME,
+--     DAY,
+--     START_HR,
+--     START_MIN,
+--     END_HR,
+--     END_MIN
+-- FROM
+--     INSTRUCTOR
+--     NATURAL JOIN TEACHES
+--     NATURAL JOIN SECTION
+--     NATURAL JOIN TIME_SLOT
+-- ORDER BY
+--     DAY,
+--     START_HR,
+--     START_MIN,
+--     NAME;
+
+-- TASK 3
+CREATE OR REPLACE PROCEDURE STUDENT_INFORMATION(
+    NUM IN NUMBER
+) AS
+    CURSOR STD_INFO IS
+        SELECT
+            *
+        FROM
+            (
+                SELECT
+                    ID,
+                    MAX(NAME)        AS NAME,
+                    MAX(DEPT_NAME)   AS DEPT_NAME,
+                    COUNT(COURSE_ID) AS NO_OF_COURSES
+                FROM
+                    STUDENT
+                    NATURAL JOIN TAKES
+                    NATURAL JOIN SECTION
+                    NATURAL JOIN COURSE
+                GROUP BY
+                    ID
+                ORDER BY
+                    NO_OF_COURSES DESC
+            )
+        WHERE
+            ROWNUM <=NUM;
+BEGIN
+    FOR I IN STD_INFO LOOP
+        DBMS_OUTPUT.PUT_LINE(I.ID
+            ||CHR(9)
+            ||I.NAME
+            ||CHR(9)
+            ||I.DEPT_NAME
+            ||CHR(9)
+            ||I.NO_OF_COURSES);
+    END LOOP;
+END;
+/
+
+DECLARE
+    NUM NUMBER;
+BEGIN
+    NUM :='&NUM';
+    STUDENT_INFORMATION(NUM);
+END;
+/
+
+
+-- TASK 4
+CREATE SEQUENCE INSTRUCTOR_ID
+MINVALUE 10001
+MAXVALUE 99999
+START WITH 10001
+INCREMENT BY 1
+CACHE 20;
+
+CREATE OR REPLACE TRIGGER AUTO_INCREMENT BEFORE
+    INSERT ON INSTRUCTOR FOR EACH ROW
+BEGIN
+    :NEW.ID := INSTRUCTOR_ID.NEXTVAL;
+END;
+/
+INSERT INTO INSTRUCTOR VALUES (
+    '0',
+    'Nazmul',
+    'Finance',
+    '69420'
+);
+INSERT INTO INSTRUCTOR VALUES (
+    '0',
+    'Sian',
+    'Comp. Sci.',
+    '42069'
+);
+
+
+-- TASK 5
+CREATE OR REPLACE TRIGGER SET_ADVISOR AFTER
+    INSERT ON STUDENT FOR EACH ROW
+DECLARE
+    I_ID INSTRUCTOR.ID%TYPE;
+BEGIN
+    SELECT
+        ID INTO I_ID
+    FROM
+        (
+            SELECT
+                INSTRUCTOR.ID,
+                INSTRUCTOR.NAME,
+                COUNT(ADVISOR.S_ID) AS NUM_OF_STUDENTS
+            FROM
+                ADVISOR,
+                INSTRUCTOR
+            WHERE
+                ADVISOR.I_ID = INSTRUCTOR.ID
+                AND INSTRUCTOR.DEPT_NAME = :NEW.DEPT_NAME
+            GROUP BY
+                INSTRUCTOR.ID,
+                INSTRUCTOR.NAME
+            ORDER BY
+                NUM_OF_STUDENTS ASC
+        )
+    WHERE
+        ROWNUM = 1;
+    INSERT INTO ADVISOR VALUES(
+        :NEW.ID,
+        I_ID
+    );
+END;
+/
+INSERT INTO STUDENT VALUES (
+    '45320',
+    'Naz',
+    'Comp. Sci.',
+    '108'
+);
